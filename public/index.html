@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3-Symbol Tic-Tac-Toe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script
+      src="https://cdn.socket.io/4.7.2/socket.io.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <style>
+      #board {
+        aspect-ratio: 1/1;
+      }
+      .cell {
+        aspect-ratio: 1/1;
+        transition: all 0.2s;
+      }
+      .cell:hover {
+        transform: scale(1.05);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        cursor: pointer;
+      }
+      .toast {
+        position: fixed;
+        bottom: 2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 0.75rem 1.5rem;
+        border-radius: 1rem;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.4s;
+        z-index: 50;
+        font-weight: 600;
+      }
+      .toast.info {
+        background: rgba(59, 130, 246, 0.9);
+        color: white;
+      }
+      .toast.error {
+        background: rgba(239, 68, 68, 0.9);
+        color: white;
+      }
+      .toast.show {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .board-disabled {
+        pointer-events: none;
+        opacity: 0.6;
+      }
+    </style>
+  </head>
+  <body
+    class="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 to-pink-100 font-sans transition-colors duration-500"
+  >
+    <div
+      class="flex flex-col items-center p-6 bg-white rounded-2xl shadow-xl w-[95%] max-w-md"
+    >
+      <h1
+        class="text-3xl md:text-4xl font-bold mb-4 text-indigo-700 text-center"
+      >
+        Tic-Tac-Toe (3 Symbol Limit)
+      </h1>
+
+      <div
+        class="flex flex-col sm:flex-row items-center justify-between w-full mb-4 gap-2"
+      >
+        <div class="flex items-center gap-2">
+          <span id="turn" class="text-lg md:text-xl font-semibold"
+            >Your Turn: X</span
+          >
+          <div
+            id="player-indicator"
+            class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-lg bg-blue-500 animate-pulse"
+          >
+            X
+          </div>
+        </div>
+        <button
+          id="themeBtn"
+          class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 transition-all"
+        >
+          🌙
+        </button>
+      </div>
+
+      <div id="board" class="grid grid-cols-3 gap-3 w-64 sm:w-80 md:w-96"></div>
+
+      <div class="flex gap-4 mt-4">
+        <button
+          id="undoBtn"
+          class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-all disabled:bg-gray-300 disabled:cursor-not-allowed"
+        >
+          ↩ Undo
+        </button>
+        <button
+          id="resetBtn"
+          class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-all"
+        >
+          Reset Game
+        </button>
+      </div>
+
+      <div
+        id="statusMessage"
+        class="mt-4 text-center font-semibold text-lg"
+      ></div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // const socket = io("http://localhost:3000");
+        const socket = io();
+        const roomId = "my-game-room";
+
+        let myPlayer = null,
+          isMyTurn = false;
+        const boardContainer = document.getElementById("board");
+        const turnText = document.getElementById("turn");
+        const playerIndicator = document.getElementById("player-indicator");
+        const undoBtn = document.getElementById("undoBtn");
+        const resetBtn = document.getElementById("resetBtn");
+        const toast = document.getElementById("toast");
+        const statusMessage = document.getElementById("statusMessage");
+
+        let moves = { X: [], O: [] };
+        const winningCombos = [
+          [0, 1, 2],
+          [3, 4, 5],
+          [6, 7, 8],
+          [0, 3, 6],
+          [1, 4, 7],
+          [2, 5, 8],
+          [0, 4, 8],
+          [2, 4, 6],
+        ];
+
+        function showToast(msg, type = "info") {
+          toast.textContent = msg;
+          toast.className = `toast show ${type}`;
+          setTimeout(() => toast.classList.remove("show"), 2500);
+        }
+
+        // Generate board
+        for (let i = 0; i < 9; i++) {
+          const cell = document.createElement("div");
+          cell.className =
+            "cell bg-white flex items-center justify-center text-5xl md:text-6xl font-bold border rounded-lg select-none";
+          cell.dataset.index = i;
+          boardContainer.appendChild(cell);
+        }
+        const board = document.querySelectorAll(".cell");
+
+        function highlightWinner(combo) {
+          combo.forEach((i) =>
+            board[i].classList.add("bg-green-300", "animate-bounce")
+          );
+        }
+
+        function updateBoard(game) {
+          board.forEach((cell, i) => {
+            const oldVal = cell.textContent;
+            cell.textContent = game.board[i];
+            cell.classList.remove(
+              "X",
+              "O",
+              "bg-green-300",
+              "animate-bounce",
+              "animate-pulse"
+            );
+            if (game.board[i]) cell.classList.add(game.board[i]);
+            if (
+              game.board[i] &&
+              game.board[i] !== myPlayer &&
+              oldVal !== game.board[i]
+            ) {
+              cell.classList.add("animate-pulse");
+              setTimeout(() => cell.classList.remove("animate-pulse"), 500);
+            }
+          });
+
+          moves = game.moves;
+          isMyTurn = game.currentPlayer === myPlayer;
+
+          if (isMyTurn) {
+            turnText.textContent = `Your Turn (${myPlayer})`;
+            boardContainer.classList.remove("board-disabled");
+          } else {
+            const opponent = myPlayer === "X" ? "O" : "X";
+            turnText.textContent = `Opponent's Turn (${opponent})`;
+            boardContainer.classList.add("board-disabled");
+          }
+
+          // Player indicator
+          playerIndicator.textContent = myPlayer;
+          playerIndicator.className = `w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-lg ${
+            myPlayer === "X"
+              ? "bg-blue-500 animate-pulse"
+              : "bg-red-500 animate-pulse"
+          }`;
+
+          // Winner
+          let winnerFound = false;
+          ["X", "O"].forEach((p) => {
+            const combo = winningCombos.find((c) =>
+              c.every((i) => game.moves[p].includes(i))
+            );
+            if (combo) {
+              highlightWinner(combo);
+              statusMessage.textContent = `Player ${p} Wins!`;
+              confetti({ particleCount: 150, spread: 70 });
+              winnerFound = true;
+            }
+          });
+
+          // Draw
+          if (!winnerFound && game.board.every((c) => c))
+            statusMessage.textContent = "It's a Draw!";
+          if (!winnerFound && game.board.some((c) => !c))
+            statusMessage.textContent = "";
+
+          // Undo button
+          undoBtn.disabled = game.removedStack.length === 0;
+        }
+
+        socket.emit("joinGame", roomId);
+        socket.on("init", (game) => {
+          myPlayer = game.myPlayer;
+          updateBoard(game);
+        });
+        socket.on("update", (game) => updateBoard(game));
+
+        board.forEach((cell) => {
+          cell.addEventListener("click", () => {
+            const index = parseInt(cell.dataset.index);
+            if (!isMyTurn) return showToast("Wait for your turn!", "error");
+            if (cell.textContent === myPlayer) {
+              showToast("Tap to remove your symbol.", "info");
+              socket.emit("removeSymbol", { roomId, index, player: myPlayer });
+              return;
+            }
+            if ((moves[myPlayer]?.length || 0) >= 3)
+              return showToast("Max 3 symbols! Remove one first.", "error");
+            socket.emit("makeMove", { roomId, index, player: myPlayer });
+          });
+        });
+
+        undoBtn.addEventListener("click", () =>
+          socket.emit("undo", { roomId })
+        );
+        resetBtn.addEventListener("click", () =>
+          socket.emit("resetGame", { roomId })
+        );
+
+        const themeBtn = document.getElementById("themeBtn");
+        let dark = false;
+        themeBtn.addEventListener("click", () => {
+          dark = !dark;
+          if (dark) {
+            document.body.classList.replace("bg-gradient-to-br", "bg-gray-900");
+            document.body.classList.add("text-white");
+            themeBtn.textContent = "☀️";
+          } else {
+            document.body.classList.replace("bg-gray-900", "bg-gradient-to-br");
+            document.body.classList.remove("text-white");
+            themeBtn.textContent = "🌙";
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
