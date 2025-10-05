@@ -18,7 +18,7 @@
         aspect-ratio: 1/1;
         transition: all 0.2s;
       }
-      .cell:hover {
+      .cell:hover:not(.disabled) {
         transform: scale(1.05);
         box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
         cursor: pointer;
@@ -35,13 +35,18 @@
         transition: opacity 0.4s;
         z-index: 50;
         font-weight: 600;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       }
       .toast.info {
-        background: rgba(59, 130, 246, 0.9);
+        background: rgba(59, 130, 246, 0.95);
         color: white;
       }
       .toast.error {
-        background: rgba(239, 68, 68, 0.9);
+        background: rgba(239, 68, 68, 0.95);
+        color: white;
+      }
+      .toast.success {
+        background: rgba(34, 197, 94, 0.95);
         color: white;
       }
       .toast.show {
@@ -52,13 +57,91 @@
         pointer-events: none;
         opacity: 0.6;
       }
+      .winning-line {
+        animation: pulse 0.5s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+      }
+      .timer-warning {
+        animation: shake 0.5s ease-in-out;
+      }
+      @keyframes shake {
+        0%,
+        100% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-5px);
+        }
+        75% {
+          transform: translateX(5px);
+        }
+      }
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal.show {
+        display: flex;
+      }
     </style>
   </head>
   <body
     class="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-100 to-pink-100 font-sans transition-colors duration-500"
   >
+    <!-- Room Selection Modal -->
+    <div id="roomModal" class="modal show">
+      <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-[90%]">
+        <h2 class="text-3xl font-bold mb-6 text-indigo-700 text-center">
+          Join Game
+        </h2>
+        <input
+          id="playerNameInput"
+          type="text"
+          placeholder="Enter your name (or auto-generate)"
+          class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4 focus:border-indigo-500 focus:outline-none"
+          maxlength="20"
+        />
+        <input
+          id="roomIdInput"
+          type="text"
+          placeholder="Enter room ID"
+          class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4 focus:border-indigo-500 focus:outline-none"
+          maxlength="50"
+        />
+        <button
+          id="joinBtn"
+          class="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all font-semibold text-lg"
+        >
+          Join Room
+        </button>
+        <button
+          id="randomRoomBtn"
+          class="w-full mt-3 px-4 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all font-semibold"
+        >
+          Create Random Room
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Game -->
     <div
-      class="flex flex-col items-center p-6 bg-white rounded-2xl shadow-xl w-[95%] max-w-md"
+      class="flex flex-col items-center p-6 bg-white rounded-2xl shadow-xl w-[95%] max-w-2xl"
     >
       <h1
         class="text-3xl md:text-4xl font-bold mb-4 text-indigo-700 text-center"
@@ -66,211 +149,524 @@
         Tic-Tac-Toe (3 Symbol Limit)
       </h1>
 
+      <!-- Game Info Bar -->
+      <div class="w-full mb-4 p-3 bg-gray-100 rounded-lg">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-gray-700">Room:</span>
+            <span
+              id="roomIdDisplay"
+              class="text-sm font-mono bg-white px-2 py-1 rounded"
+              >-</span
+            >
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-gray-700">You:</span>
+            <span
+              id="playerIdDisplay"
+              class="text-sm bg-white px-2 py-1 rounded"
+              >-</span
+            >
+          </div>
+        </div>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-gray-700">Players:</span>
+            <span id="playersCount" class="text-sm">0/2</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-semibold text-gray-700">Spectators:</span>
+            <span id="spectatorsCount" class="text-sm">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scores -->
+      <div class="flex gap-4 w-full mb-4">
+        <div class="flex-1 bg-blue-100 rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-blue-600" id="scoreX">0</div>
+          <div class="text-sm text-gray-700">Player X</div>
+        </div>
+        <div class="flex-1 bg-gray-100 rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-gray-600" id="scoreDraws">0</div>
+          <div class="text-sm text-gray-700">Draws</div>
+        </div>
+        <div class="flex-1 bg-red-100 rounded-lg p-3 text-center">
+          <div class="text-2xl font-bold text-red-600" id="scoreO">0</div>
+          <div class="text-sm text-gray-700">Player O</div>
+        </div>
+      </div>
+
+      <!-- Turn Indicator -->
       <div
         class="flex flex-col sm:flex-row items-center justify-between w-full mb-4 gap-2"
       >
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-3">
           <span id="turn" class="text-lg md:text-xl font-semibold"
-            >Your Turn: X</span
+            >Waiting...</span
           >
           <div
             id="player-indicator"
-            class="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-lg bg-blue-500 animate-pulse"
-          >
-            X
-          </div>
+            class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg"
+          ></div>
         </div>
+        <div class="flex items-center gap-2">
+          <div id="timerDisplay" class="text-lg font-bold text-gray-700 hidden">
+            ⏱️ <span id="timeLeft">30</span>s
+          </div>
+          <button
+            id="themeBtn"
+            class="px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-all"
+          >
+            🌙
+          </button>
+        </div>
+      </div>
+
+      <!-- Board -->
+      <div
+        id="board"
+        class="grid grid-cols-3 gap-3 w-64 sm:w-80 md:w-96 mb-4"
+      ></div>
+
+      <!-- Controls -->
+      <div class="flex flex-wrap gap-3 justify-center">
         <button
-          id="themeBtn"
-          class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300 transition-all"
+          id="rematchBtn"
+          class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all disabled:bg-gray-300 disabled:cursor-not-allowed hidden"
         >
-          🌙
+          🔄 Rematch
+        </button>
+        <button
+          id="leaveBtn"
+          class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all"
+        >
+          🚪 Leave Room
         </button>
       </div>
 
-      <div id="board" class="grid grid-cols-3 gap-3 w-64 sm:w-80 md:w-96"></div>
-
-      <div class="flex gap-4 mt-4">
-        <button
-          id="undoBtn"
-          class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-all disabled:bg-gray-300 disabled:cursor-not-allowed"
-        >
-          ↩ Undo
-        </button>
-        <button
-          id="resetBtn"
-          class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-all"
-        >
-          Reset Game
-        </button>
-      </div>
-
+      <!-- Status Message -->
       <div
         id="statusMessage"
         class="mt-4 text-center font-semibold text-lg"
       ></div>
+
+      <!-- Chat -->
+      <div class="w-full mt-4 border-t pt-4">
+        <h3 class="text-sm font-semibold text-gray-700 mb-2">Chat</h3>
+        <div
+          id="chatBox"
+          class="bg-gray-50 rounded-lg p-3 h-24 overflow-y-auto mb-2 text-sm"
+        ></div>
+        <div class="flex gap-2">
+          <input
+            id="chatInput"
+            type="text"
+            placeholder="Type a message..."
+            class="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:border-indigo-500"
+            maxlength="200"
+          />
+          <button
+            id="sendChatBtn"
+            class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all"
+          >
+            Send
+          </button>
+        </div>
+      </div>
     </div>
 
     <div id="toast" class="toast"></div>
 
     <script>
       document.addEventListener("DOMContentLoaded", () => {
-        // const socket = io("http://localhost:3000");
         const socket = io();
-        const roomId = "my-game-room";
 
-        let myPlayer = null,
-          isMyTurn = false;
+        let roomId = null;
+        let myPlayer = null;
+        let myPlayerId = null;
+        let isMyTurn = false;
+        let gameData = null;
+        let timerInterval = null;
+
+        // DOM elements
+        const roomModal = document.getElementById("roomModal");
+        const playerNameInput = document.getElementById("playerNameInput");
+        const roomIdInput = document.getElementById("roomIdInput");
+        const joinBtn = document.getElementById("joinBtn");
+        const randomRoomBtn = document.getElementById("randomRoomBtn");
         const boardContainer = document.getElementById("board");
         const turnText = document.getElementById("turn");
         const playerIndicator = document.getElementById("player-indicator");
-        const undoBtn = document.getElementById("undoBtn");
-        const resetBtn = document.getElementById("resetBtn");
+        const rematchBtn = document.getElementById("rematchBtn");
+        const leaveBtn = document.getElementById("leaveBtn");
         const toast = document.getElementById("toast");
         const statusMessage = document.getElementById("statusMessage");
-
-        let moves = { X: [], O: [] };
-        const winningCombos = [
-          [0, 1, 2],
-          [3, 4, 5],
-          [6, 7, 8],
-          [0, 3, 6],
-          [1, 4, 7],
-          [2, 5, 8],
-          [0, 4, 8],
-          [2, 4, 6],
-        ];
-
-        function showToast(msg, type = "info") {
-          toast.textContent = msg;
-          toast.className = `toast show ${type}`;
-          setTimeout(() => toast.classList.remove("show"), 2500);
-        }
+        const roomIdDisplay = document.getElementById("roomIdDisplay");
+        const playerIdDisplay = document.getElementById("playerIdDisplay");
+        const playersCount = document.getElementById("playersCount");
+        const spectatorsCount = document.getElementById("spectatorsCount");
+        const scoreX = document.getElementById("scoreX");
+        const scoreO = document.getElementById("scoreO");
+        const scoreDraws = document.getElementById("scoreDraws");
+        const timerDisplay = document.getElementById("timerDisplay");
+        const timeLeft = document.getElementById("timeLeft");
+        const chatBox = document.getElementById("chatBox");
+        const chatInput = document.getElementById("chatInput");
+        const sendChatBtn = document.getElementById("sendChatBtn");
 
         // Generate board
         for (let i = 0; i < 9; i++) {
           const cell = document.createElement("div");
           cell.className =
-            "cell bg-white flex items-center justify-center text-5xl md:text-6xl font-bold border rounded-lg select-none";
+            "cell bg-white flex items-center justify-center text-5xl md:text-6xl font-bold border-4 border-gray-300 rounded-lg select-none";
           cell.dataset.index = i;
           boardContainer.appendChild(cell);
         }
         const board = document.querySelectorAll(".cell");
 
-        function highlightWinner(combo) {
-          combo.forEach((i) =>
-            board[i].classList.add("bg-green-300", "animate-bounce")
-          );
+        function showToast(msg, type = "info") {
+          toast.textContent = msg;
+          toast.className = `toast show ${type}`;
+          setTimeout(() => toast.classList.remove("show"), 3000);
+        }
+
+        function generateRandomRoom() {
+          return "room-" + Math.random().toString(36).substring(2, 9);
+        }
+
+        function generateRandomName() {
+          const adjectives = [
+            "Quick",
+            "Brave",
+            "Swift",
+            "Clever",
+            "Mighty",
+            "Silent",
+            "Cosmic",
+            "Epic",
+            "Lucky",
+            "Wild",
+            "Bright",
+            "Bold",
+            "Cool",
+            "Smart",
+            "Happy",
+          ];
+          const nouns = [
+            "Panda",
+            "Tiger",
+            "Eagle",
+            "Dragon",
+            "Phoenix",
+            "Wolf",
+            "Lion",
+            "Hawk",
+            "Bear",
+            "Fox",
+            "Shark",
+            "Falcon",
+            "Ninja",
+            "Wizard",
+            "Knight",
+          ];
+          const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+          const noun = nouns[Math.floor(Math.random() * nouns.length)];
+          const num = Math.floor(Math.random() * 100);
+          return `${adj}${noun}${num}`;
+        }
+
+        function startTimer(duration) {
+          clearInterval(timerInterval);
+          let remaining = Math.ceil(duration / 1000);
+          timeLeft.textContent = remaining;
+          timerDisplay.classList.remove("hidden");
+
+          timerInterval = setInterval(() => {
+            remaining--;
+            timeLeft.textContent = remaining;
+
+            if (remaining <= 10) {
+              timerDisplay.classList.add("timer-warning", "text-red-600");
+            }
+
+            if (remaining <= 0) {
+              clearInterval(timerInterval);
+              timerDisplay.classList.add("hidden");
+            }
+          }, 1000);
+        }
+
+        function stopTimer() {
+          clearInterval(timerInterval);
+          timerDisplay.classList.add("hidden");
+          timerDisplay.classList.remove("timer-warning", "text-red-600");
         }
 
         function updateBoard(game) {
+          gameData = game;
+
           board.forEach((cell, i) => {
-            const oldVal = cell.textContent;
             cell.textContent = game.board[i];
             cell.classList.remove(
               "X",
               "O",
-              "bg-green-300",
-              "animate-bounce",
-              "animate-pulse"
+              "winning-line",
+              "bg-green-200",
+              "bg-blue-100",
+              "bg-red-100"
             );
-            if (game.board[i]) cell.classList.add(game.board[i]);
-            if (
-              game.board[i] &&
-              game.board[i] !== myPlayer &&
-              oldVal !== game.board[i]
-            ) {
-              cell.classList.add("animate-pulse");
-              setTimeout(() => cell.classList.remove("animate-pulse"), 500);
+
+            if (game.board[i] === "X") {
+              cell.classList.add("text-blue-600", "bg-blue-100");
+            } else if (game.board[i] === "O") {
+              cell.classList.add("text-red-600", "bg-red-100");
             }
           });
 
-          moves = game.moves;
-          isMyTurn = game.currentPlayer === myPlayer;
+          // Highlight winning line
+          if (game.winningLine) {
+            game.winningLine.forEach((i) => {
+              board[i].classList.add("winning-line", "bg-green-200");
+            });
+          }
 
-          if (isMyTurn) {
+          isMyTurn =
+            game.currentPlayer === myPlayer && game.gameStatus === "playing";
+
+          // Update turn display
+          if (game.gameStatus === "waiting") {
+            turnText.textContent = "Waiting for players...";
+            boardContainer.classList.add("board-disabled");
+            playerIndicator.textContent = "";
+            stopTimer();
+          } else if (game.gameStatus === "finished") {
+            turnText.textContent = "Game Over";
+            boardContainer.classList.add("board-disabled");
+            stopTimer();
+          } else if (myPlayer === "spectator") {
+            turnText.textContent = `${game.currentPlayer}'s Turn (Spectating)`;
+            boardContainer.classList.add("board-disabled");
+            if (isMyTurn) startTimer(30000);
+          } else if (isMyTurn) {
             turnText.textContent = `Your Turn (${myPlayer})`;
             boardContainer.classList.remove("board-disabled");
+            startTimer(30000);
           } else {
             const opponent = myPlayer === "X" ? "O" : "X";
             turnText.textContent = `Opponent's Turn (${opponent})`;
             boardContainer.classList.add("board-disabled");
+            stopTimer();
           }
 
-          // Player indicator
-          playerIndicator.textContent = myPlayer;
-          playerIndicator.className = `w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-lg ${
-            myPlayer === "X"
-              ? "bg-blue-500 animate-pulse"
-              : "bg-red-500 animate-pulse"
-          }`;
+          // Update player indicator
+          if (myPlayer && myPlayer !== "spectator") {
+            playerIndicator.textContent = myPlayer;
+            playerIndicator.className = `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg ${
+              myPlayer === "X" ? "bg-blue-500" : "bg-red-500"
+            } ${isMyTurn ? "animate-pulse" : ""}`;
+          }
 
-          // Winner
-          let winnerFound = false;
-          ["X", "O"].forEach((p) => {
-            const combo = winningCombos.find((c) =>
-              c.every((i) => game.moves[p].includes(i))
-            );
-            if (combo) {
-              highlightWinner(combo);
-              statusMessage.textContent = `Player ${p} Wins!`;
-              confetti({ particleCount: 150, spread: 70 });
-              winnerFound = true;
-            }
-          });
+          // Update scores
+          if (game.scores) {
+            scoreX.textContent = game.scores.X;
+            scoreO.textContent = game.scores.O;
+            scoreDraws.textContent = game.scores.draws;
+          }
 
-          // Draw
-          if (!winnerFound && game.board.every((c) => c))
-            statusMessage.textContent = "It's a Draw!";
-          if (!winnerFound && game.board.some((c) => !c))
+          // Status message
+          if (game.gameStatus === "finished") {
             statusMessage.textContent = "";
-
-          // Undo button
-          undoBtn.disabled = game.removedStack.length === 0;
+            rematchBtn.classList.remove("hidden");
+          } else {
+            statusMessage.textContent = "";
+            rematchBtn.classList.add("hidden");
+          }
         }
 
-        socket.emit("joinGame", roomId);
-        socket.on("init", (game) => {
-          myPlayer = game.myPlayer;
+        function updateRoomInfo(data) {
+          const playerCount = Object.keys(data.players || {}).length;
+          playersCount.textContent = `${playerCount}/2`;
+          spectatorsCount.textContent = data.spectators || 0;
+        }
+
+        function addChatMessage(msg) {
+          const div = document.createElement("div");
+          div.className = "mb-1";
+          const roleColor =
+            msg.role === "X"
+              ? "text-blue-600"
+              : msg.role === "O"
+              ? "text-red-600"
+              : "text-gray-600";
+          div.innerHTML = `<span class="${roleColor} font-semibold">${msg.playerId} (${msg.role}):</span> ${msg.message}`;
+          chatBox.appendChild(div);
+          chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        // Join room
+        joinBtn.addEventListener("click", () => {
+          const room = roomIdInput.value.trim();
+          let name = playerNameInput.value.trim();
+
+          if (!room) {
+            showToast("Please enter a room ID", "error");
+            return;
+          }
+
+          // Generate random name if empty
+          if (!name) {
+            name = generateRandomName();
+          }
+
+          roomId = room;
+          socket.emit("joinGame", roomId, name);
+        });
+
+        randomRoomBtn.addEventListener("click", () => {
+          const room = generateRandomRoom();
+          let name = playerNameInput.value.trim();
+
+          // Generate random name if empty
+          if (!name) {
+            name = generateRandomName();
+          }
+
+          roomId = room;
+          roomIdInput.value = room;
+          socket.emit("joinGame", roomId, name);
+        });
+
+        roomIdInput.addEventListener("keypress", (e) => {
+          if (e.key === "Enter") joinBtn.click();
+        });
+
+        // Socket events
+        socket.on("init", (data) => {
+          myPlayer = data.myPlayer;
+          myPlayerId = data.playerId;
+          roomIdDisplay.textContent = data.roomId || roomId;
+          playerIdDisplay.textContent = myPlayerId;
+          roomModal.classList.remove("show");
+          updateBoard(data);
+          updateRoomInfo(data);
+          showToast(`Joined as ${myPlayer}`, "success");
+        });
+
+        socket.on("update", (game) => {
           updateBoard(game);
         });
-        socket.on("update", (game) => updateBoard(game));
 
+        socket.on("gameOver", (data) => {
+          stopTimer();
+
+          if (data.winner === "draw") {
+            statusMessage.textContent = "It's a Draw!";
+            showToast("Game ended in a draw!", "info");
+          } else {
+            statusMessage.textContent = `Player ${data.winner} Wins!`;
+            if (data.winner === myPlayer) {
+              confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+              showToast("You won! 🎉", "success");
+            } else {
+              showToast(`Player ${data.winner} won!`, "info");
+            }
+          }
+
+          if (data.reason === "timeout") {
+            showToast(data.message, "error");
+          }
+        });
+
+        socket.on("gameReset", () => {
+          statusMessage.textContent = "";
+          showToast("Game reset - New round started!", "info");
+        });
+
+        socket.on("playerJoined", (data) => {
+          updateRoomInfo(data);
+          showToast(`${data.playerId} joined as ${data.role}`, "info");
+        });
+
+        socket.on("playerLeft", (data) => {
+          updateRoomInfo(data);
+          showToast(`${data.playerId} (${data.role}) left the game`, "info");
+        });
+
+        socket.on("roomInfo", (data) => {
+          updateRoomInfo(data);
+        });
+
+        socket.on("error", (data) => {
+          showToast(data.message, "error");
+        });
+
+        socket.on("chatMessage", (msg) => {
+          addChatMessage(msg);
+        });
+
+        // Board clicks
         board.forEach((cell) => {
           cell.addEventListener("click", () => {
+            if (!isMyTurn || myPlayer === "spectator") return;
+
             const index = parseInt(cell.dataset.index);
-            if (!isMyTurn) return showToast("Wait for your turn!", "error");
-            if (cell.textContent === myPlayer) {
-              showToast("Tap to remove your symbol.", "info");
-              socket.emit("removeSymbol", { roomId, index, player: myPlayer });
+
+            // Remove own symbol
+            if (gameData.board[index] === myPlayer) {
+              socket.emit("removeSymbol", { roomId, index });
               return;
             }
-            if ((moves[myPlayer]?.length || 0) >= 3)
-              return showToast("Max 3 symbols! Remove one first.", "error");
-            socket.emit("makeMove", { roomId, index, player: myPlayer });
+
+            // Place symbol
+            if (gameData.board[index] === "") {
+              if (gameData.moves[myPlayer].length >= 3) {
+                showToast(
+                  "Max 3 symbols! Click your symbol to remove it first.",
+                  "error"
+                );
+                return;
+              }
+              socket.emit("makeMove", { roomId, index });
+            }
           });
         });
 
-        undoBtn.addEventListener("click", () =>
-          socket.emit("undo", { roomId })
-        );
-        resetBtn.addEventListener("click", () =>
-          socket.emit("resetGame", { roomId })
-        );
+        // Rematch
+        rematchBtn.addEventListener("click", () => {
+          socket.emit("rematch", { roomId });
+        });
 
+        // Leave room
+        leaveBtn.addEventListener("click", () => {
+          socket.disconnect();
+          location.reload();
+        });
+
+        // Chat
+        sendChatBtn.addEventListener("click", () => {
+          const message = chatInput.value.trim();
+          if (message) {
+            socket.emit("chatMessage", { roomId, message });
+            chatInput.value = "";
+          }
+        });
+
+        chatInput.addEventListener("keypress", (e) => {
+          if (e.key === "Enter") sendChatBtn.click();
+        });
+
+        // Theme toggle
         const themeBtn = document.getElementById("themeBtn");
         let dark = false;
         themeBtn.addEventListener("click", () => {
           dark = !dark;
-          if (dark) {
-            document.body.classList.replace("bg-gradient-to-br", "bg-gray-900");
-            document.body.classList.add("text-white");
-            themeBtn.textContent = "☀️";
-          } else {
-            document.body.classList.replace("bg-gray-900", "bg-gradient-to-br");
-            document.body.classList.remove("text-white");
-            themeBtn.textContent = "🌙";
-          }
+          document.body.classList.toggle("bg-gradient-to-br", !dark);
+          document.body.classList.toggle("from-indigo-100", !dark);
+          document.body.classList.toggle("to-pink-100", !dark);
+          document.body.classList.toggle("bg-gray-900", dark);
+          document.body.classList.toggle("text-white", dark);
+          themeBtn.textContent = dark ? "☀️" : "🌙";
         });
       });
     </script>
